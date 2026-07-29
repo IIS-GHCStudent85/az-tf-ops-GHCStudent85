@@ -70,15 +70,7 @@ resource "azurerm_subnet_network_security_group_association" "app" {
   network_security_group_id = azurerm_network_security_group.orders.id
 }
 
-resource "azurerm_public_ip" "app" {
-  name                = "pip-summit-orders-dev"
-  resource_group_name = azurerm_resource_group.orders.name
-  location            = azurerm_resource_group.orders.location
-  allocation_method   = "Static"
-  sku                 = "Standard"
 
-  tags = azurerm_resource_group.orders.tags
-}
 
 resource "azurerm_network_interface" "app" {
   name                = "nic-summit-orders-dev"
@@ -95,34 +87,7 @@ resource "azurerm_network_interface" "app" {
   tags = azurerm_resource_group.orders.tags
 }
 
-resource "azurerm_linux_virtual_machine" "app" {
-  name                = "vm-summit-orders-dev"
-  resource_group_name = azurerm_resource_group.orders.name
-  location            = azurerm_resource_group.orders.location
-  size                = "Standard_F1als_v7"
 
-  admin_username                  = "azureuser"
-  admin_password                  = var.vm_admin_password
-  disable_password_authentication = false
-
-  network_interface_ids = [
-    azurerm_network_interface.app.id,
-  ]
-
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
-  }
-
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "ubuntu-24_04-lts"
-    sku       = "server"
-    version   = "latest"
-  }
-
-  tags = azurerm_resource_group.orders.tags
-}
 
 resource "azurerm_storage_account" "orders" {
   # CHANGE THIS: replace <suffix> with your 4-character student suffix.
