@@ -1,10 +1,10 @@
 resource "azurerm_linux_virtual_machine" "app" {
-  name                = "vm-summit-orders-dev"
+  name                = "vm-${local.name_prefix}"
   resource_group_name = azurerm_resource_group.orders.name
   location            = azurerm_resource_group.orders.location
-  size                = "Standard_F1als_v7"
+  size                = var.vm_size
 
-  admin_username                  = "azureuser"
+  admin_username                  = var.vm_admin_username
   admin_password                  = var.vm_admin_password
   disable_password_authentication = false
 
@@ -24,15 +24,15 @@ resource "azurerm_linux_virtual_machine" "app" {
     version   = "latest"
   }
 
-  tags = azurerm_resource_group.orders.tags
+  tags = merge(local.tags, { role = "app-server" })
 }
 
 resource "azurerm_public_ip" "app" {
-  name                = "pip-summit-orders-dev"
+  name                = "pip-${local.name_prefix}"
   resource_group_name = azurerm_resource_group.orders.name
   location            = azurerm_resource_group.orders.location
   allocation_method   = "Static"
   sku                 = "Standard"
 
-  tags = azurerm_resource_group.orders.tags
+  tags = local.tags
 }

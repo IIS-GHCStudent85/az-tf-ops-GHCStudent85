@@ -13,14 +13,19 @@ provider "azurerm" {
   features {}
 }
 
-resource "azurerm_resource_group" "orders" {
-  name     = "rg-summit-orders-prod"
-  location = "eastus"
+locals {
+  name_prefix = "${var.org}-${var.solution}-${var.environment}"
 
   tags = {
-    environment = "prod"
-    solution    = "orders"
-    owner       = "ops-team"
+    environment = var.environment
+    solution    = var.solution
+    owner       = var.owner
     managed_by  = "terraform"
   }
+}
+
+resource "azurerm_resource_group" "orders" {
+  name     = "rg-${local.name_prefix}"
+  location = var.location
+  tags     = local.tags
 }
