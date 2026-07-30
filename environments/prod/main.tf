@@ -29,3 +29,68 @@ resource "azurerm_resource_group" "orders" {
   location = var.location
   tags     = local.tags
 }
+
+# ---------------------------------------------------------------------------
+# Network: virtual network, subnets, NSG, rules, and the subnet associations.
+# ---------------------------------------------------------------------------
+module "network" {
+  source = "git::https://github.com/Innovation-In-Software/az-tf-ops-modules.git//network?ref=v1.1.0"
+
+  name_prefix         = local.name_prefix
+  resource_group_name = azurerm_resource_group.orders.name
+  location            = var.location
+  address_space       = var.vnet_address_space
+
+  subnets = {
+    app  = { address_prefix = cidrsubnet(var.vnet_address_space[0], 8, 1) }
+    data = { address_prefix = cidrsubnet(var.vnet_address_space[0], 8, 2) }
+  }
+
+  inbound_rules = {
+    AllowSSHFromAdmin = {
+      priority               = 100
+      protocol               = "Tcp"
+      destination_port_range = "22"
+      source_address_prefix  = var.allowed_ssh_source
+    }
+  }
+
+  tags = local.tags
+}
+
+# ---------------------------------------------------------------------------
+# Compute. subnet_id comes straight out of the network module's output.
+# ---------------------------------------------------------------------------
+module "app_vm" {
+  source = "git::https://github.com/Innovation-In-Software/az-tf-ops-modules.git//linux-vm?ref=v1.1.0"
+
+  name_prefix         = local.name_prefix
+  resource_group_name = azurerm_resource_group.orders.name
+  location            = var.location
+  subnet_id           = module.network.subnet_ids["app"]
+
+  vm_size        = var.vm_size
+  admin_password = var.vm_admin_password
+
+  tags = merge(local.tags, { role = "app-server" })
+}
+
+# ---------------------------------------------------------------------------
+# Storage.
+# ---------------------------------------------------------------------------
+module "storage" {
+  source = "git::https://github.com/Innovation-In-Software/az-tf-ops-modules.git//storage?ref=v1.1.0"
+
+  name_prefix         = local.name_prefix
+  name_suffix         = var.storage_name_suffix
+  resource_group_name = azurerm_resource_group.orders.name
+  location            = var.location
+
+  containers = {
+    "orders-data" = { access_type = "private" }
+    "orders-logs" = { access_type = "private" }
+  }
+
+  tags = local.tags
+}
+
