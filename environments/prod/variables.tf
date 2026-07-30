@@ -31,3 +31,35 @@ variable "owner" {
   type        = string
   default     = "ops-team"
 }
+
+variable "vnet_address_space" {
+  description = "Address space for the production virtual network."
+  type        = list(string)
+}
+
+variable "vm_size" {
+  description = "Azure VM size for the production application server."
+  type        = string
+  default     = "Standard_D2als_v7"
+}
+
+variable "vm_admin_password" {
+  description = "Admin password for the production VM. Supplied at run time."
+  type        = string
+  sensitive   = true
+}
+
+variable "allowed_ssh_source" {
+  description = "The one public IP allowed to reach the VM on port 22, in CIDR form."
+  type        = string
+
+  validation {
+    condition     = can(cidrhost(var.allowed_ssh_source, 0))
+    error_message = "allowed_ssh_source must be valid CIDR notation."
+  }
+}
+
+variable "storage_name_suffix" {
+  description = "Your 4-character student suffix, for global storage account uniqueness."
+  type        = string
+}
