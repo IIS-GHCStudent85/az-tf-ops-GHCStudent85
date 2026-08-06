@@ -28,3 +28,4 @@ output "subnet_address_prefix" {
   description = "Address prefix computed for the app subnet."
   value       = one(azurerm_subnet.app.address_prefixes)
 }
+
