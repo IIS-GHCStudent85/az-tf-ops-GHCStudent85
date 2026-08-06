@@ -70,7 +70,7 @@ module "app_vm" {
   subnet_id           = module.network.subnet_ids["app"]
 
   vm_size        = var.vm_size
-  admin_password = var.vm_admin_password
+  admin_password = data.azurerm_key_vault_secret.vm_admin_password.value
 
   tags = merge(local.tags, { role = "app-server" })
 }
@@ -94,3 +94,12 @@ module "storage" {
   tags = local.tags
 }
 
+data "azurerm_key_vault" "orders" {
+  name                = var.key_vault_name
+  resource_group_name = var.key_vault_resource_group_name
+}
+
+data "azurerm_key_vault_secret" "vm_admin_password" {
+  name         = "vm-admin-password"
+  key_vault_id = data.azurerm_key_vault.orders.id
+}

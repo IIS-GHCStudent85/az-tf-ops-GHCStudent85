@@ -23,7 +23,7 @@
   Azure region. Defaults to eastus.
 
 .EXAMPLE
-  .\scripts\seed-key-vault.ps1 -Suffix jr42
+  .\scripts\seed-key-vault.ps1 -Suffix jr63
 #>
 [CmdletBinding()]
 param(
@@ -34,7 +34,14 @@ param(
     [string]$Location = 'eastus'
 )
 
-$ErrorActionPreference = 'Stop'
+# az is a native command, not a cmdlet. When it fails it writes to stderr and sets
+# a non-zero $LASTEXITCODE; it never throws. Windows PowerShell converts that
+# stderr write into a *terminating* error whenever $ErrorActionPreference is
+# 'Stop', and `2>$null` does NOT prevent it. That kills this script on failures it
+# is supposed to handle, such as probing for a vault that is not there yet, before
+# any exit-code check can run. So keep the preference at 'Continue' and test
+# $LASTEXITCODE after each az call whose outcome matters.
+$ErrorActionPreference = 'Continue'
 
 $resourceGroup = 'rg-summit-security'
 $secretName    = 'vm-admin-password'
@@ -58,6 +65,7 @@ az group create `
     --location $Location `
     --tags solution=orders owner=security-team managed_by=bootstrap `
     --output none
+if ($LASTEXITCODE -ne 0) { throw "Could not create resource group $resourceGroup." }
 Write-Host "resource group $resourceGroup ready" -ForegroundColor Green
 
 function New-SummitVault {
@@ -86,6 +94,7 @@ function New-SummitVault {
             --retention-days 7 `
             --tags environment=$Environment solution=orders owner=security-team managed_by=bootstrap `
             --output none
+        if ($LASTEXITCODE -ne 0) { throw "Could not create vault $vaultName." }
         Write-Host "  vault created" -ForegroundColor Green
     }
     else {
@@ -110,26 +119,32 @@ function New-SummitVault {
     $password = 'Su!' + ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', 'x')
 
     # Role assignments take up to a couple of minutes to reach the data plane.
+    #
+    # NOTE: az is a native command. A failure sets a non-zero $LASTEXITCODE, it
+    # does NOT throw, so try/catch cannot detect it. Check the exit code.
     $set = $false
     foreach ($attempt in 1..10) {
-        try {
-            az keyvault secret set `
-                --vault-name $vaultName `
-                --name $secretName `
-                --value $password `
-                --output none 2>$null
-            $set = $true
-            break
-        }
-        catch {
-            Write-Host "  waiting for the role assignment to propagate (attempt $attempt of 10)..." -ForegroundColor DarkGray
-            Start-Sleep -Seconds 15
-        }
+        az keyvault secret set `
+            --vault-name $vaultName `
+            --name $secretName `
+            --value $password `
+            --output none 2>$null
+        if ($LASTEXITCODE -eq 0) { $set = $true; break }
+        Write-Host "  waiting for the role assignment to propagate (attempt $attempt of 10)..." -ForegroundColor DarkGray
+        Start-Sleep -Seconds 15
     }
     if (-not $set) {
         throw "Could not write the secret to $vaultName. Role assignments sometimes take several minutes; wait and rerun this script."
     }
-    Write-Host "  secret '$secretName' set" -ForegroundColor Green
+
+    # Prove it is readable before claiming success. Terraform will read this
+    # secret through a data source, and a vault that accepts a write but is not
+    # yet readable produces a confusing "secret does not exist" at plan time.
+    az keyvault secret show --vault-name $vaultName --name $secretName --output none 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Wrote the secret to $vaultName but cannot read it back. Wait a minute and rerun this script."
+    }
+    Write-Host "  secret '$secretName' set and readable" -ForegroundColor Green
 
     return $vaultName
 }

@@ -34,6 +34,18 @@ locals {
   storage_replication_type = var.environment == "prod" ? "GRS" : "LRS"
 }
 
+# Look up the vault. Terraform does not manage it; the security team does.
+data "azurerm_key_vault" "orders" {
+  name                = var.key_vault_name
+  resource_group_name = var.key_vault_resource_group_name
+}
+
+# Read the secret out of it, at plan and apply time, every run.
+data "azurerm_key_vault_secret" "vm_admin_password" {
+  name         = "vm-admin-password"
+  key_vault_id = data.azurerm_key_vault.orders.id
+}
+
 resource "azurerm_resource_group" "orders" {
   name     = "rg-${local.name_prefix}"
   location = var.location

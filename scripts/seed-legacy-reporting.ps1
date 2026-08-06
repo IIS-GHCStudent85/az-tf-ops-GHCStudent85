@@ -27,7 +27,7 @@
   Azure region. Defaults to eastus.
 
 .EXAMPLE
-  .\scripts\seed-legacy-reporting.ps1 -Suffix jr42
+  .\scripts\seed-legacy-reporting.ps1 -Suffix jr63
 #>
 [CmdletBinding()]
 param(
@@ -38,7 +38,14 @@ param(
     [string]$Location = 'eastus'
 )
 
-$ErrorActionPreference = 'Stop'
+# az is a native command, not a cmdlet. When it fails it writes to stderr and sets
+# a non-zero $LASTEXITCODE; it never throws. Windows PowerShell converts that
+# stderr write into a *terminating* error whenever $ErrorActionPreference is
+# 'Stop', and `2>$null` does NOT prevent it. That kills this script on failures it
+# is supposed to handle, such as probing for a vault that is not there yet, before
+# any exit-code check can run. So keep the preference at 'Continue' and test
+# $LASTEXITCODE after each az call whose outcome matters.
+$ErrorActionPreference = 'Continue'
 
 $resourceGroup  = 'rg-legacy-reporting'
 $storageAccount = "stsmtlegacy$Suffix"
@@ -85,16 +92,18 @@ else {
 
 $created = $false
 foreach ($attempt in 1..6) {
-    try {
-        az storage container create `
-            --name $container `
-            --account-name $storageAccount `
-            --auth-mode login `
-            --output none 2>$null
+    # az is a native command: a failure sets $LASTEXITCODE and does not throw,
+    # so try/catch would never fire here.
+    az storage container create `
+        --name $container `
+        --account-name $storageAccount `
+        --auth-mode login `
+        --output none 2>$null
+    if ($LASTEXITCODE -eq 0) {
         $created = $true
         break
     }
-    catch {
+    else {
         Write-Host "  waiting for storage permissions to propagate..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 10
     }
